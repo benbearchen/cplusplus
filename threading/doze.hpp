@@ -9,7 +9,7 @@ namespace common {
 
 class Doze {
 public:
-	explicit Doze(int ms) {
+	explicit Doze(int ms = 50) {
 		timeout = std::chrono::milliseconds(ms);
 	}
 
