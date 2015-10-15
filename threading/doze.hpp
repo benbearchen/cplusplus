@@ -25,6 +25,14 @@ public:
 		flag = false;
 		return e;
 	}
+
+	bool wait_until(std::chrono::steady_clock::time_point until) {
+		std::unique_lock<std::mutex> u(mutex);
+		bool e = condvar.wait_until(u, until, [this](){return flag;});
+		flag = false;
+		return e;
+	}
+
 private:
 	std::condition_variable condvar;
 	std::mutex mutex;

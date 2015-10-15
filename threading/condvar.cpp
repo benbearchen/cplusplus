@@ -93,4 +93,9 @@ int main() {
 	n2t.join();
 	n2T.join();
 	w2t.join();
+
+	std::cout << "wait until 3s" << std::endl;
+	boot = std::chrono::steady_clock::now();
+	doze.wait_until(std::chrono::steady_clock::now() + std::chrono::milliseconds(3000));
+	std::cout << tick() << " exit" << std::endl;
 }
