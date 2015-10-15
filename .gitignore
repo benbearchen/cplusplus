@@ -73,3 +73,10 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# vim
+*~
+*.swp
+
+# g++
+*.stackdump
