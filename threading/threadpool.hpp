@@ -21,6 +21,14 @@ public:
 	       	work_thread.swap(w);
 	}
 
+	~ThreadPool() {
+		stop();
+		join();
+	}
+
+	ThreadPool(const ThreadPool&) = delete;
+	ThreadPool& operator=(const ThreadPool&) = delete;
+
 	void stop() {
 		stopped = true;
 		timer_doze.notify();
@@ -43,8 +51,11 @@ public:
 	}
 
 	void join() {
-		timer_thread.join();
-		work_thread.join();
+		if (timer_thread.joinable())
+			timer_thread.join();
+
+		if (work_thread.joinable())
+			work_thread.join();
 	}
 
 private:

@@ -13,6 +13,9 @@ public:
 		timeout = std::chrono::milliseconds(ms);
 	}
 
+	Doze(const Doze&) = delete;
+	Doze& operator=(const Doze&) = delete;
+
 	void notify() {
 		std::unique_lock<std::mutex> u(mutex);
 		flag = true;
