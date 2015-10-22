@@ -44,7 +44,7 @@ public:
 	void post_dealyed(int ms, Task task) {
 		std::unique_lock<std::mutex> u(mutex);
 		auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
-		auto f = [=](const DelayTask& dt) { return dt.until >= until; };
+		auto f = [=](const DelayTask& dt) { return dt.until > until; };
 		auto i = std::find_if(delay_tasks.begin(), delay_tasks.end(), f);
 		delay_tasks.insert(i, DelayTask{until, task});
 		timer_doze.notify();

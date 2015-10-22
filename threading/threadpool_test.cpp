@@ -56,7 +56,10 @@ int main() {
 
 	std::cout << std::endl;
 	boot = std::chrono::steady_clock::now();
-	pool.post_dealyed(0, [](){std::cout << tick() << " delay 0ms" << std::endl; });
+	pool.post_dealyed(0, [](){std::cout << tick() << " first delay 0ms" << std::endl; });
+	pool.post_dealyed(0, [](){std::cout << tick() << " second delay 0ms" << std::endl; });
+	pool.post([](){std::cout << tick() << " first no delay" << std::endl; });
+	pool.post([](){std::cout << tick() << " second no delay" << std::endl; });
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
