@@ -29,6 +29,13 @@ public:
 		return e;
 	}
 
+	bool wait_for(int ms) {
+		std::unique_lock<std::mutex> u(mutex);
+		bool e = condvar.wait_for(u, std::chrono::milliseconds(ms), [this](){return flag;});
+		flag = false;
+		return e;
+	}
+
 	bool wait_until(std::chrono::steady_clock::time_point until) {
 		std::unique_lock<std::mutex> u(mutex);
 		bool e = condvar.wait_until(u, until, [this](){return flag;});
