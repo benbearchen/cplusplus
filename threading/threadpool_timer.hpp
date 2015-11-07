@@ -14,7 +14,7 @@ template <typename Task = std::function<void()>,
 class ThreadPoolTimer {
 public:
 	ThreadPoolTimer(Pool pool) {
-        this->pool = pool;
+		this->pool = pool;
 
 		auto t = std::thread([this](){thread_timer();});
 		timer_thread.swap(t);
@@ -87,7 +87,7 @@ private:
 	std::thread timer_thread;
 	Doze timer_doze;
 
-    Pool pool;
+	Pool pool;
 
 	std::mutex mutex;
 	std::list<DelayTask> delay_tasks;
