@@ -3,6 +3,7 @@
 
 #include <list>
 #include <thread>
+#include <vector>
 
 #include "doze.hpp"
 
@@ -11,72 +12,96 @@ namespace common {
 template <typename Task = std::function<void()>>
 class ThreadPool {
 public:
-	ThreadPool() : work_doze(1000) {
-		auto w = std::thread([this](){thread_work();});
-	       	work_thread.swap(w);
-	}
-
-	~ThreadPool() {
-		stop();
-		join();
-	}
-
-	ThreadPool(const ThreadPool&) = delete;
-	ThreadPool& operator=(const ThreadPool&) = delete;
-
-	void stop() {
-		stopped = true;
-		work_doze.notify();
-	}
-
-	void post(Task task) {
-		std::unique_lock<std::mutex> u(mutex);
-        if (tasks.empty()) {
-            work_doze.notify();
+    explicit ThreadPool(int num = 1) : work_doze(1000) {
+        if (num < 1) {
+            num = 1;
         }
 
-		tasks.push_back(task);
-	}
+        max_num = num;
+        work_threads.reserve(max_num);
+        new_thread();
+    }
 
-	void join() {
-		if (work_thread.joinable())
-			work_thread.join();
-	}
+    ~ThreadPool() {
+        stop();
+        join();
+    }
+
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+
+    void stop() {
+        stopped = true;
+        work_doze.notify();
+    }
+
+    void post(Task task) {
+        std::unique_lock<std::mutex> u(mutex);
+        if (tasks.empty()) {
+            work_doze.notify();
+        } else {
+            new_thread();
+        }
+
+        tasks.push_back(task);
+    }
 
 private:
-	void thread_work() {
-		while (!stopped) {
-			work_doze.wait();
-			check_work();
-		}
-	}
+    void join() {
+        for (auto& work_thread : work_threads) {
+            if (work_thread.joinable())
+                work_thread.join();
+        }
 
-	void check_work() {
-		while (!stopped) {
-			Task task;
-			{
-				std::unique_lock<std::mutex> u(mutex);
-				if (tasks.empty()) {
-					return;
-				}
+        work_threads.clear();
+    }
 
-				task = tasks.front();
-				tasks.pop_front();
-			}
+    void thread_work() {
+        while (!stopped) {
+            work_doze.wait();
+            check_work();
+        }
+    }
 
-			if (task) {
-				task();
-			}
-		}
-	}
+    void check_work() {
+        while (!stopped) {
+            Task task;
+            {
+                std::unique_lock<std::mutex> u(mutex);
+                if (tasks.empty()) {
+                    return;
+                }
 
-	std::thread work_thread;
-	Doze work_doze;
+                task = tasks.front();
+                tasks.pop_front();
+                if (!tasks.empty()) {
+                    work_doze.notify();
+                }
+            }
 
-	std::mutex mutex;
-	std::list<Task> tasks;
+            if (task) {
+                task();
+            }
+        }
+    }
 
-	bool stopped = false;
+    void new_thread() {
+        int c = int(work_threads.size());
+        if (c < max_num) {
+            work_threads.resize(c + 1);
+            auto w = std::thread([this](){ thread_work(); });
+            work_threads[c].swap(w);
+        }
+    }
+
+    std::vector<std::thread> work_threads;
+    Doze work_doze;
+
+    std::mutex mutex;
+    std::list<Task> tasks;
+
+    int max_num = 1;
+    bool stopped = false;
 };
 
 }
