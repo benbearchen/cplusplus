@@ -118,5 +118,19 @@ int main() {
             << "us, post delay self" << std::endl;
     }
 
+    boot = std::chrono::steady_clock::now();
+
+    auto eid = timer.event_id();
+    timer.post_overwrite(eid, 1000, [&]() { std::cout << tick() << " event 1s" << std::endl; });
+    timer.post_overwrite(eid, 100, [&]() { std::cout << tick() << " event 0.1s" << std::endl; });
+    timer.post_overwrite(eid, 2000, [&]() { std::cout << tick() << " event 0.2s" << std::endl; });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    timer.post_overwrite(eid, 100, [&]() { std::cout << tick() << " should miss event 0.1s" << std::endl; });
+    timer.remove(eid);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     testmulti();
 }
