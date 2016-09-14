@@ -205,6 +205,7 @@ private:
         std::chrono::steady_clock::time_point t;
 
         bool arrival = false;
+        bool empty = tasks.empty() && arrival_event_tasks.empty();
         auto now = std::chrono::steady_clock::now();
 
         for (auto i = std::begin(event_tasks); i != std::end(event_tasks); ) {
@@ -243,6 +244,10 @@ private:
         }
 
         if (arrival) {
+            if (!empty) {
+                new_thread();
+            }
+
             work_doze.notify();
         }
 

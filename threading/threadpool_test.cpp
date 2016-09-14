@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <iostream>
+#include <string>
 
 #include <stdio.h>
 
@@ -10,6 +11,13 @@ auto boot = std::chrono::steady_clock::now();
 double tick() {
     auto d = std::chrono::steady_clock::now() - boot;
     return std::chrono::duration<double>(d).count();
+}
+
+std::string TICK() {
+    auto t = tick();
+    char buf[64] = {};
+    sprintf(buf, "%.6f", t);
+    return buf;
 }
 
 common::Doze doze;
@@ -56,9 +64,21 @@ private:
 
 void testmulti() {
     std::cout << std::endl << "test multi threadpool" << std::endl;
-    boot = std::chrono::steady_clock::now();
 
     common::ThreadPool<> pool(4);
+
+    boot = std::chrono::steady_clock::now();
+    std::cout << std::endl;
+
+    for (int i = 0; i < 10; i++) {
+        pool.post_overwrite(pool.event_id(), i / 4 * 10, [=]() { std::cout << TICK() << " test delay new thread " << i << std::endl; });
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    boot = std::chrono::steady_clock::now();
+    std::cout << std::endl;
+
     postself test_pool([&](std::function<void()> p){pool.post(p);});
     pool.post(std::bind(test_pool, 4));
 
@@ -74,8 +94,8 @@ void testmulti() {
         pool.post_overwrite(eid, 0, [&]() { zerot++; pool.post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(1)); }); });
     }
 
-    std::cout << tick() << " post zero finished" << std::endl;
-    pool.post([&]() { std::cout << tick() << " post zero " << zerotimes << " times, got " << zerot << std::endl; });
+    std::cout << TICK() << " post zero finished" << std::endl;
+    pool.post([&]() { std::cout << TICK() << " post zero " << zerotimes << " times, got " << zerot << std::endl; });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
@@ -86,21 +106,21 @@ int main() {
     boot = std::chrono::steady_clock::now();
 
     pool.post([](){
-              std::cout << tick() << " right now" << std::endl;
+              std::cout << TICK() << " right now" << std::endl;
               std::this_thread::sleep_for(std::chrono::milliseconds(50));
               });
-    pool.post(520, [](){std::cout << tick() << " delay 520ms" << std::endl;});
+    pool.post(520, [](){std::cout << TICK() << " delay 520ms" << std::endl;});
     pool.post(10, [&](){
-              std::cout << tick() << " delay 10ms" << std::endl;
+              std::cout << TICK() << " delay 10ms" << std::endl;
               pool.post(50, [](){
-                        std::cout << tick() << " delay 50ms on delay 10ms"
+                        std::cout << TICK() << " delay 50ms on delay 10ms"
                         << std::endl;
                         });
               });
     pool.post(149, [&](){
-              std::cout << tick() << " delay 149ms" << std::endl;
+              std::cout << TICK() << " delay 149ms" << std::endl;
               pool.post([](){
-                        std::cout << tick() << " again on delay 149ms" << std::endl;
+                        std::cout << TICK() << " again on delay 149ms" << std::endl;
                         });
               });
 
@@ -108,10 +128,10 @@ int main() {
 
     std::cout << std::endl;
     boot = std::chrono::steady_clock::now();
-    pool.post(0, [](){ std::cout << tick() << " first delay 0ms" << std::endl; });
-    pool.post(0, [](){ std::cout << tick() << " second delay 0ms" << std::endl; });
-    pool.post([](){ std::cout << tick() << " first no delay" << std::endl; });
-    pool.post([](){ std::cout << tick() << " second no delay" << std::endl; });
+    pool.post(0, [](){ std::cout << TICK() << " first delay 0ms" << std::endl; });
+    pool.post(0, [](){ std::cout << TICK() << " second delay 0ms" << std::endl; });
+    pool.post([](){ std::cout << TICK() << " first no delay" << std::endl; });
+    pool.post([](){ std::cout << TICK() << " second no delay" << std::endl; });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -137,13 +157,13 @@ int main() {
     std::cout << std::endl;
 
     auto eid = pool.event_id();
-    pool.post_overwrite(eid, 1000, [&]() { std::cout << tick() << " event 1s" << std::endl; });
-    pool.post_overwrite(eid, 100, [&]() { std::cout << tick() << " event 0.1s" << std::endl; });
-    pool.post_overwrite(eid, 2000, [&]() { std::cout << tick() << " event 0.2s" << std::endl; });
+    pool.post_overwrite(eid, 1000, [&]() { std::cout << TICK() << " event 1s" << std::endl; });
+    pool.post_overwrite(eid, 100, [&]() { std::cout << TICK() << " event 0.1s" << std::endl; });
+    pool.post_overwrite(eid, 2000, [&]() { std::cout << TICK() << " event 0.2s" << std::endl; });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    pool.post_overwrite(eid, 100, [&]() { std::cout << tick() << " should miss event 0.1s" << std::endl; });
+    pool.post_overwrite(eid, 100, [&]() { std::cout << TICK() << " should miss event 0.1s" << std::endl; });
     pool.remove(eid);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -158,8 +178,8 @@ int main() {
         pool.post_overwrite(eid, 0, [&]() { zerot++; std::this_thread::sleep_for(std::chrono::milliseconds(1)); });
     }
 
-    std::cout << tick() << " post zero finished" << std::endl;
-    pool.post([&]() { std::cout << tick() << " post zero " << zerotimes << " times, got " << zerot << std::endl; });
+    std::cout << TICK() << " post zero finished" << std::endl;
+    pool.post([&]() { std::cout << TICK() << " post zero " << zerotimes << " times, got " << zerot << std::endl; });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
