@@ -22,9 +22,6 @@ public:
         max_num = num;
         work_threads.reserve(max_num);
         new_thread();
-
-        auto t = std::thread([this](){thread_timer();});
-        timer_thread.swap(t);
     }
 
     ~ThreadPool() {
@@ -54,6 +51,8 @@ public:
 
     void post(int ms, Task task) {
         std::unique_lock<std::mutex> u(mutex);
+        new_timer_thread();
+
         auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
         auto f = [=](const DelayTask& dt) { return dt.until > until; };
         auto i = std::find_if(delay_tasks.begin(), delay_tasks.end(), f);
@@ -75,6 +74,7 @@ public:
 
     void post_overwrite(EVENT e, std::chrono::steady_clock::time_point until, Task task) {
         std::unique_lock<std::mutex> u(mutex);
+        new_timer_thread();
 
         if (arrival_event_tasks.find(e) != arrival_event_tasks.end()) {
             return;
@@ -114,8 +114,12 @@ private:
 
         work_threads.clear();
 
-        if (timer_thread.joinable()) {
-            timer_thread.join();
+        if (timer_thread) {
+            if (timer_thread->joinable()) {
+                timer_thread->join();
+            }
+
+            timer_thread.reset();
         }
     }
 
@@ -189,6 +193,12 @@ private:
         }
     }
 
+    void new_timer_thread() {
+        if (!timer_thread) {
+            timer_thread.reset(new std::thread([this](){thread_timer();}));
+        }
+    }
+
     std::chrono::steady_clock::time_point flush_delay() {
         std::unique_lock<std::mutex> u(mutex);
         std::chrono::steady_clock::time_point zero;
@@ -245,7 +255,7 @@ private:
     std::vector<std::thread> work_threads;
     Doze work_doze;
 
-    std::thread timer_thread;
+    std::unique_ptr<std::thread> timer_thread;
     Doze timer_doze;
 
     std::mutex mutex;
