@@ -100,6 +100,29 @@ void testmulti() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
 
+void test_new_thread() {
+    std::cout << std::endl << "test auto creating new thread" << std::endl;
+
+    common::ThreadPool<> pool(4);
+
+    boot = std::chrono::steady_clock::now();
+    std::cout << std::endl;
+
+    pool.post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(500)); });
+
+    auto now = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    for (int i = 0; i < 50; i++) {
+        auto foo = [=]() {
+            std::cout << TICK() << " test new thread " << i << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        };
+
+        pool.post_overwrite(pool.event_id(), now, foo);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1600));
+}
+
 int main() {
     common::ThreadPool<> pool;
 
@@ -184,4 +207,6 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     testmulti();
+
+    test_new_thread();
 }

@@ -150,6 +150,10 @@ private:
                 task = tasks.front();
                 tasks.pop_front();
                 if (!tasks.empty()) {
+                    if (tasks.size() > 1) {
+                        new_thread();
+                    }
+
                     work_doze.notify();
                 }
             }
@@ -174,6 +178,10 @@ private:
                 arrival_event_tasks.erase(p);
 
                 if (!arrival_event_tasks.empty()) {
+                    if (arrival_event_tasks.size() > 1) {
+                        new_thread();
+                    }
+
                     work_doze.notify();
                 }
             }
@@ -204,14 +212,14 @@ private:
         std::chrono::steady_clock::time_point zero;
         std::chrono::steady_clock::time_point t;
 
-        bool arrival = false;
-        bool empty = tasks.empty() && arrival_event_tasks.empty();
+        size_t arrival = 0;
+        size_t elder = tasks.size() + arrival_event_tasks.size();
         auto now = std::chrono::steady_clock::now();
 
         for (auto i = std::begin(event_tasks); i != std::end(event_tasks); ) {
             auto et = i->second.until;
             if (et <= now) {
-                arrival = true;
+                ++arrival;
                 arrival_event_tasks.insert(*i);
                 event_tasks.erase(i++);
                 continue;
@@ -226,7 +234,7 @@ private:
         while (!delay_tasks.empty()) {
             auto dt = delay_tasks.front().until;
             if (dt <= now) {
-                arrival = true;
+                ++arrival;
                 tasks.push_back(delay_tasks.front().task);
                 delay_tasks.pop_front();
                 continue;
@@ -243,8 +251,8 @@ private:
             t = now + std::chrono::seconds(1);
         }
 
-        if (arrival) {
-            if (!empty) {
+        if (arrival > 0) {
+            if (arrival + elder > 1) {
                 new_thread();
             }
 
