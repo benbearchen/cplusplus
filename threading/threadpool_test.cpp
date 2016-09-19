@@ -137,6 +137,23 @@ void test_new_thread() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
 
+void test_post_create_thread() {
+    std::cout << std::endl << "test auto creating new thread by post()" << std::endl;
+
+    common::ThreadPool<> pool(2);
+
+    boot = std::chrono::steady_clock::now();
+
+    pool.post(1, []() { std::cout << "--" << std::endl; });
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    pool.post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(500)); std::cout << TICK() << " step1 end" << std::endl; });
+
+    pool.post([]() { std::cout << TICK() << " step2 start should before step1 end" << std::endl; std::this_thread::sleep_for(std::chrono::milliseconds(300)); });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+}
+
 int main() {
     common::ThreadPool<> pool;
 
@@ -178,15 +195,13 @@ int main() {
         int c = 10000;
         postself test_pool([&](std::function<void()> p){pool.post(p);}, c);
         doze.wait_until(boot+std::chrono::minutes(1));
-        double t = tick(); 
-        std::cout << t << "s/" << c << " per " << (t / c * 1000000)
+        std::cout << TICK() << "s/" << c << " per " << (tick() / c * 1000000)
             << "us, post self" << std::endl;
 
         boot = std::chrono::steady_clock::now();
         postself test_timer([&](std::function<void()> p){pool.post(0, p);}, c);
         doze.wait_until(boot+std::chrono::minutes(1));
-        t = tick(); 
-        std::cout << t << "s/" << c << " per " << (t / c * 1000000)
+        std::cout << TICK() << "s/" << c << " per " << (tick() / c * 1000000)
             << "us, post delay self" << std::endl;
     }
 
@@ -223,4 +238,6 @@ int main() {
     testmulti();
 
     test_new_thread();
+
+    test_post_create_thread();
 }

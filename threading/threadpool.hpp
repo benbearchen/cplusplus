@@ -42,13 +42,12 @@ public:
 
     void post(Task task) {
         std::unique_lock<std::mutex> u(mutex);
-        if (tasks.empty()) {
-            work_doze.notify();
-        } else {
+        if (1 + tasks.size() + run_num > work_threads.size()) {
             new_thread();
         }
 
         tasks.push_back(std::move(IDTask{0, std::move(task)}));
+        work_doze.notify();
     }
 
     void post(int ms, Task task) {
@@ -155,8 +154,11 @@ private:
 
     void thread_work() {
         while (!stopped) {
-            work_doze.wait();
             check_work();
+
+            if (!stopped) {
+                work_doze.wait();
+            }
         }
     }
 
