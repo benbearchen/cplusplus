@@ -2,6 +2,7 @@
 #define __COMMON_THREAD_POOL_HPP__
 
 #include <algorithm>
+#include <atomic>
 #include <list>
 #include <map>
 #include <thread>
@@ -106,6 +107,18 @@ private:
         Task task;
     };
 
+    class AutoCount {
+        std::atomic<size_t>& c_;
+    public:
+        AutoCount(std::atomic<size_t>& c) : c_(c) {
+            ++c_;
+        }
+
+        ~AutoCount() {
+            --c_;
+        }
+    };
+
     void join() {
         for (auto& work_thread : work_threads) {
             if (work_thread.joinable())
@@ -127,7 +140,6 @@ private:
         while (!stopped) {
             work_doze.wait();
             check_work();
-            check_delay();
         }
     }
 
@@ -141,54 +153,39 @@ private:
     void check_work() {
         while (!stopped) {
             Task task;
-            {
-                std::unique_lock<std::mutex> u(mutex);
-                if (tasks.empty()) {
-                    return;
-                }
+            if (take_task(&task)) {
+                AutoCount ac(run_num);
 
-                task = tasks.front();
-                tasks.pop_front();
-                if (!tasks.empty()) {
-                    if (tasks.size() > 1) {
-                        new_thread();
-                    }
-
-                    work_doze.notify();
-                }
-            }
-
-            if (task) {
                 task();
             }
         }
     }
 
-    void check_delay() {
-        while (!stopped) {
-            Task task;
-            {
-                std::unique_lock<std::mutex> u(mutex);
-                if (arrival_event_tasks.empty()) {
-                    return;
-                }
+    bool take_task(Task* task) {
+        std::unique_lock<std::mutex> u(mutex);
 
-                auto p = arrival_event_tasks.begin();
-                task = p->second.task;
-                arrival_event_tasks.erase(p);
+        size_t wait = tasks.size() + arrival_event_tasks.size();
+        if (wait == 0) {
+            return false;
+        }
 
-                if (!arrival_event_tasks.empty()) {
-                    if (arrival_event_tasks.size() > 1) {
-                        new_thread();
-                    }
+        if (!tasks.empty()) {
+            *task = std::move(tasks.front());
+            tasks.pop_front();
+        } else if (!arrival_event_tasks.empty()) {
+            auto p = arrival_event_tasks.begin();
+            *task = std::move(p->second.task);
+            arrival_event_tasks.erase(p);
+        } else {
+            return false;
+        }
 
-                    work_doze.notify();
-                }
+        if (wait > 1) {
+            if (wait + run_num > work_threads.size()) {
+                new_thread();
             }
 
-            if (task) {
-                task();
-            }
+            work_doze.notify();
         }
     }
 
@@ -252,7 +249,7 @@ private:
         }
 
         if (arrival > 0) {
-            if (arrival + elder > 1) {
+            if (arrival + elder + run_num > work_threads.size()) {
                 new_thread();
             }
 
@@ -263,6 +260,7 @@ private:
     }
 
     int max_num = 1;
+    std::atomic<size_t> run_num;
     int volatile next_event_id = 1;
 
     std::vector<std::thread> work_threads;
