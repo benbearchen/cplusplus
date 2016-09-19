@@ -110,17 +110,31 @@ void test_new_thread() {
 
     pool.post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(500)); });
 
-    auto now = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
-    for (int i = 0; i < 50; i++) {
-        auto foo = [=]() {
-            std::cout << TICK() << " test new thread " << i << std::endl;
+    auto foo = [](int id) {
+        return [=]() {
+            std::cout << TICK() << " test new thread " << id << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(30));
         };
+    };
 
-        pool.post_overwrite(pool.event_id(), now, foo);
+    auto now = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    for (int i = 0; i < 50; i++) {
+        auto id = pool.event_id();
+        pool.post_overwrite(id, now, foo(id));
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(1600));
+    pool.remove(3);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    pool.remove(48);
+
+    pool.post_overwrite(48, 100, foo(48));
+    pool.post(foo(51));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    pool.post_overwrite(3, now, foo(3));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
 
 int main() {

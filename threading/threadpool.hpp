@@ -5,6 +5,7 @@
 #include <atomic>
 #include <list>
 #include <map>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -47,7 +48,7 @@ public:
             new_thread();
         }
 
-        tasks.push_back(task);
+        tasks.push_back(std::move(IDTask{0, std::move(task)}));
     }
 
     void post(int ms, Task task) {
@@ -57,7 +58,7 @@ public:
         auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
         auto f = [=](const DelayTask& dt) { return dt.until > until; };
         auto i = std::find_if(delay_tasks.begin(), delay_tasks.end(), f);
-        delay_tasks.insert(i, DelayTask{until, task});
+        delay_tasks.insert(i, std::move(DelayTask{until, std::move(task)}));
         timer_doze.notify();
     }
 
@@ -83,10 +84,10 @@ public:
 
         auto p = event_tasks.find(e);
         if (p == event_tasks.end()) {
-            event_tasks[e] = DelayTask{until, task};
+            event_tasks[e] = std::move(DelayTask{until, std::move(task)});
         } else {
             if (p->second.until > until) {
-                p->second = DelayTask{until, task};
+                p->second = std::move(DelayTask{until, std::move(task)});
             } else {
                 return;
             }
@@ -97,11 +98,27 @@ public:
 
     void remove(EVENT e) {
         std::unique_lock<std::mutex> u(mutex);
-        arrival_event_tasks.erase(e);
+        auto p = arrival_event_tasks.find(e);
+        if (p != arrival_event_tasks.end()) {
+            for (auto i = std::begin(tasks); i != std::end(tasks); ++i) {
+                if (i->id == e) {
+                    tasks.erase(i);
+                    break;
+                }
+            }
+
+            arrival_event_tasks.erase(p);
+        }
+
         event_tasks.erase(e);
     }
 
 private:
+    struct IDTask {
+        EVENT id;
+        Task task;
+    };
+
     struct DelayTask {
         std::chrono::steady_clock::time_point until;
         Task task;
@@ -163,25 +180,20 @@ private:
 
     bool take_task(Task* task) {
         std::unique_lock<std::mutex> u(mutex);
-
-        size_t wait = tasks.size() + arrival_event_tasks.size();
-        if (wait == 0) {
+        if (tasks.empty()) {
             return false;
+        }
+
+        int id = tasks.front().id;
+        *task = std::move(tasks.front().task);
+        tasks.pop_front();
+
+        if (id > 0) {
+            arrival_event_tasks.erase(id);
         }
 
         if (!tasks.empty()) {
-            *task = std::move(tasks.front());
-            tasks.pop_front();
-        } else if (!arrival_event_tasks.empty()) {
-            auto p = arrival_event_tasks.begin();
-            *task = std::move(p->second.task);
-            arrival_event_tasks.erase(p);
-        } else {
-            return false;
-        }
-
-        if (wait > 1) {
-            if (wait + run_num > work_threads.size()) {
+            if (1 + tasks.size() + run_num > work_threads.size()) {
                 new_thread();
             }
 
@@ -210,14 +222,14 @@ private:
         std::chrono::steady_clock::time_point t;
 
         size_t arrival = 0;
-        size_t elder = tasks.size() + arrival_event_tasks.size();
         auto now = std::chrono::steady_clock::now();
 
         for (auto i = std::begin(event_tasks); i != std::end(event_tasks); ) {
             auto et = i->second.until;
             if (et <= now) {
                 ++arrival;
-                arrival_event_tasks.insert(*i);
+                tasks.push_back(std::move(IDTask{i->first, std::move(i->second.task)}));
+                arrival_event_tasks.insert(i->first);
                 event_tasks.erase(i++);
                 continue;
             }
@@ -232,7 +244,7 @@ private:
             auto dt = delay_tasks.front().until;
             if (dt <= now) {
                 ++arrival;
-                tasks.push_back(delay_tasks.front().task);
+                tasks.push_back(std::move(IDTask{0, std::move(delay_tasks.front().task)}));
                 delay_tasks.pop_front();
                 continue;
             }
@@ -249,7 +261,7 @@ private:
         }
 
         if (arrival > 0) {
-            if (arrival + elder + run_num > work_threads.size()) {
+            if (tasks.size() + run_num > work_threads.size()) {
                 new_thread();
             }
 
@@ -271,9 +283,9 @@ private:
 
     std::mutex mutex;
 
-    std::list<Task> tasks;
+    std::list<IDTask> tasks;
     std::list<DelayTask> delay_tasks;
-    std::map<EVENT, DelayTask> arrival_event_tasks;
+    std::set<EVENT> arrival_event_tasks;
     std::map<EVENT, DelayTask> event_tasks;
 
     bool volatile stopped = false;
