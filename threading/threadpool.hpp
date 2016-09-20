@@ -203,6 +203,8 @@ private:
 
             work_doze.notify();
         }
+
+        return true;
     }
 
     void new_thread() {
