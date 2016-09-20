@@ -176,6 +176,8 @@ private:
                 AutoCount ac(run_num);
 
                 task();
+            } else {
+                return;
             }
         }
     }
