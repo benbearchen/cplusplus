@@ -31,29 +31,44 @@ struct Grids {
     bool Erase(Cord c);
 };
 
+////////////////////////////
+//  表示一行（列）空闲格子的（连续）区域
+////////////////////////////
 struct LineFree {
+    // [Key, Value) 组成一个左闭右开的空闲区域
     std::map<int, int> freeRanges;
 
+    // 从空闲格子列表及总长度构造一个 LineFree
     LineFree(std::vector<int> pos, int n);
+    // 构造一个 [p0, p1) 的简单 LineFree
     LineFree(int p0, int p1);
 
+    // 添加一个空闲格子
     void Free(int p);
+    // 获取“非”空闲格子 p 两边毗邻的空闲区域，即 [p0, p) 及 [p+1, p1)
     void NearFree(int p, int* p0, int* p1) const;
+    // 求 this 与 line 的空闲区域的交集，写入 line
     void MatchFree(LineFree* line) const;
 
     bool IsFree(int p) const;
+    // 获取离 p0、p1 最近的空闲格子，没有空闲格子返回 -1
     int Nearest(int p0, int p1);
 
     bool Empty() const;
 };
 
 struct Guider {
+    // 棋盘
     Grids grids;
+    // 块值及其坐标
     std::map<int, std::vector<Cord>> blocks;
+    // 每一行的空闲区间
     std::vector<LineFree> rows;
+    // 每一列的空闲区间
     std::vector<LineFree> cols;
 
     void init();
+    // 求 <a0, b0> 与 <a1, b1> 在 b 方向上可以连通两点的中间线
     bool twoLineMatch(int a0, int a1, int b0, int b1,
             const std::vector<LineFree>& lines,
             int* bridge);
@@ -63,6 +78,7 @@ public:
 
     void Clear();
 
+    // 寻找一条可以连接 a、b 的路线
     bool Match(Cord a, Cord b, std::vector<Cord>* path);
     bool Erase(Cord c);
 
@@ -134,14 +150,17 @@ LineFree::LineFree(int p0, int p1) {
 }
 
 void LineFree::Free(int p) {
+    // upper_bound 保证如果 p 已经存在，则一定是在 i 的前一个结点
     auto i = freeRanges.upper_bound(p);
     bool match = false;
     if (i != freeRanges.begin()) {
         auto h = i;
         h--;
         if (p < h->second) {
+            // 满足 h->first < p && p < h->second，说明已经在 h
             return;
         } else if (p == h->second) {
+            // 与 h 刚好连续，追加到 h
             h->second++;
             i = h;
             match = true;
@@ -149,8 +168,11 @@ void LineFree::Free(int p) {
     }
 
     if (!match) {
+        // 没有可连续的区域，创建一个新的区域
         i = freeRanges.insert(i, std::make_pair(p, p + 1));
     }
+
+    // 现在 i 指向 p 所在的区域。下面尝试合并 i 及之后的区域
 
     while (i != freeRanges.end()) {
         auto j = i;
@@ -160,6 +182,7 @@ void LineFree::Free(int p) {
         } else if (i->second != j->first) {
             break;
         } else {
+            // i 与 j 连续，合并之
             i->second = j->second;
             freeRanges.erase(j);
         }
@@ -172,6 +195,7 @@ void LineFree::NearFree(int p, int* p0, int* p1) const {
         auto h = i;
         h--;
         if (h->second == p) {
+            // p 左边区域刚好与 p 连接
             *p0 = h->first;
         } else {
             *p0 = p;
@@ -182,6 +206,7 @@ void LineFree::NearFree(int p, int* p0, int* p1) const {
 
     if (i != freeRanges.end()) {
         if (i->first == p + 1) {
+            // p 刚好与右边区域连接
             *p1 = i->second;
         } else {
             *p1 = p + 1;
@@ -192,34 +217,44 @@ void LineFree::NearFree(int p, int* p0, int* p1) const {
 }
 
 void LineFree::MatchFree(LineFree* line) const {
+    // 目标区域
     auto i = line->freeRanges.begin();
+    // 参考区域
     auto j = freeRanges.begin();
 
     while (i != line->freeRanges.end() && j != freeRanges.end()) {
         if (i->second <= j->first) {
+            // 目标区域在参考区域更左边，不可能匹配，删除此目标区域
             i = line->freeRanges.erase(i);
         } else if (j->second <= i->first) {
+            // 参考区域在目标区域左边，不影响当前区域，跳过参考区域
             j++;
         } else {
+            // 求出交集区域
             int b = std::max(i->first, j->first);
             int e = std::min(i->second, j->second);
             if (e != i->second) {
+                // 目标区域右边更长，分离超出部分为新的目标区域
                 line->freeRanges.insert(i, std::make_pair(e, i->second));
             }
 
             if (b != i->first) {
+                // 目标区域左边更长，插入新结点，移除旧节点
                 auto h = i;
                 i = line->freeRanges.insert(i, std::make_pair(b, e));
                 line->freeRanges.erase(h);
             } else {
+                // 目标区域左边跟参考区域一致，更新右边界
                 i->second = e;
             }
 
+            // 目标区域后移。参考区域右边可能还有更长，不动先
             i++;
         }
     }
 
     while (i != line->freeRanges.end()) {
+        // 剩余目标区域不可能被匹配，全部删除之
         i = line->freeRanges.erase(i);
     }
 }
@@ -244,6 +279,7 @@ int LineFree::Nearest(int p0, int p1) {
         auto h = i;
         h--;
         if (p0 < h->second) {
+            // p0 本身在空闲节点，返回之
             return p0;
         }
     }
@@ -253,18 +289,21 @@ int LineFree::Nearest(int p0, int p1) {
         auto h = j;
         h--;
         if (p1 < h->second) {
+            // p1 本身在空闲节点，返回之
             return p1;
         }
     }
 
     if (i != j) {
+        // i 在 p0 与 p1 之间，返回此区间第一个格子
         return i->first;
     }
 
+    // 到此处，空闲区间都在 p0 与 p1 的外侧，随便返回一个
     if (j != freeRanges.end()) {
         return j->first;
     } else if (i != freeRanges.begin()) {
-        return (--i)->second;
+        return (--i)->second - 1;
     } else {
         return -1;
     }
@@ -324,6 +363,7 @@ bool Guider::twoLineMatch(int a0, int a1, int b0, int b1,
     int n11 = -1;
     lines[a1].NearFree(b1, &n10, &n11);
 
+    // 求出 b0 两侧空闲区间（含 b0）与 b1 两侧空闲区间的交集
     LineFree free(n00, n01);
     LineFree(n10, n11).MatchFree(&free);
 
@@ -334,9 +374,12 @@ bool Guider::twoLineMatch(int a0, int a1, int b0, int b1,
     }
 
     for (int i = b + 1; i != e && !free.Empty(); i++) {
+        // 与 (b0, b1) 之间每一条线的空闲区间（格子）的交集
         lines[i].MatchFree(&free);
     }
 
+    // 剩下 free 的空闲格子都是可以连接 a 与 b 的“桥”，
+    // 找出较近的一条连接线
     *bridge = free.Nearest(b0, b1);
     return *bridge >= 0;
 }
@@ -351,16 +394,44 @@ bool Guider::Match(Cord a, Cord b, std::vector<Cord>* path) {
         return false;
     }
 
+    // 连连看用最多三笔水平或者竖直的线连接两个格子，可以分类与以下几种情况：
+    //      一条水平线段
+    //      一条竖直线段
+    //      一条水平线段加一条竖直线段
+    //      一条水平线段加两条竖直线段
+    //      两条水平线段加一条竖直线段
+    //
+    // 以上五种情况，又可以分成两类（有重合的情况）：
+    //      一条水平线段加零到两条竖直线段
+    //      一条竖直线段加零到两条水平线段
+    //
+    // 以下按一条水平线或一条竖直线分别处理
+
     if (a.x != b.x) {
+        // 两个点不在同一竖线上，则寻找一条水平线与之匹配。
+        // 下面的处理逻辑是：
+        // 两个点各自在竖直方向毗邻空闲格子延伸出竖直的线段，
+        // 寻找一条水平（空闲）线段去连接两条竖直线段。
+        //
+        // 最终可以形成如下连线形状（拓扑）：
+        //         +---o   o---+   o           o   +---+    o   o
+        // o---o   |           |   |           |   |   |    |   |
+        //         |   o   o   |   +---+   +---+   o   |    |   |
+        //         o   |   |   o       |   |           |    +---+
+        //             |   |           |   o           o
+        //         o---+   +---o       o
+        //
+        // 以上 o 表示被连接的块，+ 表示线段转折
+
         int bridge = -1;
         if (twoLineMatch(a.x, b.x, a.y, b.y, cols, &bridge)) {
             path->push_back(a);
             if (bridge != a.y) {
-                path->push_back(Cord{a.x, bridge});
+                path->push_back(Cord(a.x, bridge));
             }
 
             if (bridge != b.y) {
-                path->push_back(Cord{b.x, bridge});
+                path->push_back(Cord(b.x, bridge));
             }
 
             path->push_back(b);
@@ -369,6 +440,8 @@ bool Guider::Match(Cord a, Cord b, std::vector<Cord>* path) {
     }
 
     if (a.y != b.y) {
+        // 两个点不在同一水平线上，则寻找一条竖线与之匹配。
+        // 原理与上面相同。
         int bridge = -1;
         if (twoLineMatch(a.y, b.y, a.x, b.x, rows, &bridge)) {
             path->push_back(a);
@@ -439,13 +512,19 @@ void Guider::Print(const std::vector<Cord>& path) {
         printf("match %2d: ", grids.At(path[0]));
 
         const char* arrow = "";
+        size_t cross = 0;
         for (Cord c : path) {
             printf("%s(%2d, %2d)", arrow, c.x, c.y);
             arrow = " --> ";
 
             if (g[c.y][c.x] == ".") {
                 g[c.y][c.x] = "+";
+                cross++;
             }
+        }
+
+        if (cross + 2 != path.size()) {
+            assert(false && "print over write a number");
         }
 
         printf("\n");
@@ -458,13 +537,21 @@ void Guider::Print(const std::vector<Cord>& path) {
             int f = std::min(a.y, b.y);
             int e = std::max(a.y, b.y);
             for (int j = f + 1; j < e; j++) {
-                g[j][a.x] = "|";
+                if (g[j][a.x] == ".") {
+                    g[j][a.x] = "|";
+                } else {
+                    assert(false && "print over write a number");
+                }
             }
         } else {
             int f = std::min(a.x, b.x);
             int e = std::max(a.x, b.x);
             for (int j = f + 1; j < e; j++) {
-                g[a.y][j] = "--";
+                if (g[a.y][j] == ".") {
+                    g[a.y][j] = "--";
+                } else {
+                    assert(false && "print over write a number");
+                }
             }
 
             if (g[a.y][e] == "+") {
